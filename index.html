@@ -10,81 +10,147 @@
     html, body {
       width: 1920px;
       height: 1080px;
-      background: #1a1a1a;
+      background: transparent;
       overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
     }
 
-    #ticker-bar {
+    #ticker-wrap {
       position: absolute;
       bottom: 0;
       left: 0;
       width: 1920px;
-      height: 150px;
+      height: 64px;
+      background: #f5f5f5;
+      border-top: 3px solid #1a1a2e;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
     }
 
-    .stocktwits-widget {
-      display: block;
-      width: 1920px;
-      height: 150px;
+    #ticker-label {
+      flex-shrink: 0;
+      width: 160px;
+      height: 100%;
+      background: #1a1a2e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
     }
 
-    #ticker-bar iframe {
-      display: block !important;
-      border: none !important;
-      width: 1920px !important;
-      min-width: 1920px !important;
-      /* Do NOT set height here — let the widget animate to 150px naturally */
+    #ticker-label span {
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    #ticker-track-wrap {
+      flex: 1;
+      overflow: hidden;
+      height: 100%;
+      position: relative;
+    }
+
+    #ticker-track {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      white-space: nowrap;
+      will-change: transform;
+    }
+
+    .ticker-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 28px;
+      height: 100%;
+      border-right: 1px solid #ddd;
+      flex-shrink: 0;
+    }
+
+    .ticker-symbol {
+      font-size: 17px;
+      font-weight: 700;
+      color: #1a1a2e;
+      letter-spacing: 0.5px;
+    }
+
+    .ticker-change { font-size: 15px; font-weight: 500; }
+    .ticker-change.up   { color: #16a34a; }
+    .ticker-change.down { color: #dc2626; }
+    .ticker-change.flat { color: #555; }
+
+    #ticker-loading {
+      padding-left: 24px;
+      font-size: 15px;
+      color: #888;
     }
   </style>
 </head>
 <body>
 
-  <div id="ticker-bar">
-    <div class="stocktwits-widget"
-      data-animated="true"
-      data-asset-class="equity"
-      data-color-theme="light"
-      data-location="US"
-      data-logos="true"
-      data-quantity="20"
-      data-sparklines="true"
-      data-transparent="true"
-      data-widget="bar">
-      <script async src="https://widgets-api.stocktwits-cdn.com/loader.js"></script>
-    </div>
+<div id="ticker-wrap">
+  <div id="ticker-label"><span>TRENDING</span></div>
+  <div id="ticker-track-wrap">
+    <div id="ticker-loading">Loading...</div>
+    <div id="ticker-track"></div>
   </div>
+</div>
 
-  <script>
-    function waitForIframe() {
-      const iframe = document.querySelector('#ticker-bar iframe');
-      if (!iframe) {
-        setTimeout(waitForIframe, 200);
-        return;
-      }
+<script>
+  let animFrame, pos = 0, trackWidth = 0;
 
-      console.log('[ST] iframe found — waiting for height transition to complete...');
+  function buildItem(sym) {
+    const chg   = sym.quotes?.change_percent;
+    const hasChg = chg != null;
+    const dir   = hasChg ? (chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat') : 'flat';
+    const arrow = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '';
+    const label = hasChg ? `${arrow} ${Math.abs(chg).toFixed(2)}%` : '—';
+    const el = document.createElement('div');
+    el.className = 'ticker-item';
+    el.innerHTML = `<span class="ticker-symbol">${sym.symbol}</span><span class="ticker-change ${dir}">${label}</span>`;
+    return el;
+  }
 
-      // Widget animates height 0 -> 150px over 0.35s
-      // Wait 800ms to be safe, then lock it
-      setTimeout(() => {
-        const h = iframe.offsetHeight;
-        console.log('[ST] height after transition:', h);
-
-        // Lock at whatever height it settled at (should be 150)
-        iframe.style.setProperty('height', h + 'px', 'important');
-        iframe.style.setProperty('min-height', h + 'px', 'important');
-        iframe.style.setProperty('transition', 'none', 'important');
-        iframe.style.setProperty('width', '1920px', 'important');
-        iframe.style.setProperty('min-width', '1920px', 'important');
-        iframe.style.setProperty('display', 'block', 'important');
-        iframe.style.setProperty('border', 'none', 'important');
-
-        console.log('[ST] locked at:', iframe.offsetWidth, 'x', iframe.offsetHeight);
-      }, 800);
+  function startScroll() {
+    const track = document.getElementById('ticker-track');
+    trackWidth = track.scrollWidth / 2;
+    pos = 0;
+    function step() {
+      pos += 0.6;
+      if (pos >= trackWidth) pos = 0;
+      track.style.transform = `translateX(${-pos}px)`;
+      animFrame = requestAnimationFrame(step);
     }
+    animFrame = requestAnimationFrame(step);
+  }
 
-    window.addEventListener('load', () => setTimeout(waitForIframe, 300));
-  </script>
+  async function loadTicker() {
+    try {
+      const res  = await fetch('/api/trending');
+      const data = await res.json();
+      const syms = data.symbols || [];
+      if (!syms.length) throw new Error('No symbols');
+
+      const track   = document.getElementById('ticker-track');
+      const loading = document.getElementById('ticker-loading');
+      loading.style.display = 'none';
+      track.innerHTML = '';
+
+      [...syms, ...syms].forEach(s => track.appendChild(buildItem(s)));
+      startScroll();
+      setTimeout(() => { cancelAnimationFrame(animFrame); loadTicker(); }, 60000);
+    } catch(e) {
+      console.error('[ST Ticker]', e);
+      document.getElementById('ticker-loading').textContent = 'Unable to load data';
+    }
+  }
+
+  loadTicker();
+</script>
 
 </body>
 </html>

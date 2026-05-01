@@ -83,7 +83,7 @@
     .ticker-change.down { color: #dc2626; }
     .ticker-change.flat { color: #555; }
 
-    #ticker-loading {
+    #ticker-status {
       padding-left: 24px;
       font-size: 15px;
       color: #888;
@@ -95,33 +95,36 @@
 <div id="ticker-wrap">
   <div id="ticker-label"><span>TRENDING</span></div>
   <div id="ticker-track-wrap">
-    <div id="ticker-loading">Loading...</div>
+    <div id="ticker-status">Loading...</div>
     <div id="ticker-track"></div>
   </div>
 </div>
 
 <script>
-  let animFrame, pos = 0, trackWidth = 0;
+  let animFrame, pos = 0;
 
   function buildItem(sym) {
-    const chg   = sym.quotes?.change_percent;
-    const hasChg = chg != null;
-    const dir   = hasChg ? (chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat') : 'flat';
-    const arrow = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '';
-    const label = hasChg ? `${arrow} ${Math.abs(chg).toFixed(2)}%` : '—';
+    const chg    = sym.quote?.change_percent ?? sym.quotes?.change_percent ?? null;
+    const hasChg = chg != null && chg !== 0;
+    const dir    = chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat';
+    const arrow  = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '';
+    const label  = hasChg ? `${arrow} ${Math.abs(chg).toFixed(2)}%` : `${arrow || '—'}`;
+
     const el = document.createElement('div');
     el.className = 'ticker-item';
-    el.innerHTML = `<span class="ticker-symbol">${sym.symbol}</span><span class="ticker-change ${dir}">${label}</span>`;
+    el.innerHTML = `
+      <span class="ticker-symbol">${sym.symbol}</span>
+      <span class="ticker-change ${dir}">${label}</span>
+    `;
     return el;
   }
 
-  function startScroll() {
-    const track = document.getElementById('ticker-track');
-    trackWidth = track.scrollWidth / 2;
+  function startScroll(track) {
+    const half = track.scrollWidth / 2;
     pos = 0;
     function step() {
       pos += 0.6;
-      if (pos >= trackWidth) pos = 0;
+      if (pos >= half) pos = 0;
       track.style.transform = `translateX(${-pos}px)`;
       animFrame = requestAnimationFrame(step);
     }
@@ -129,23 +132,32 @@
   }
 
   async function loadTicker() {
+    const status = document.getElementById('ticker-status');
+    const track  = document.getElementById('ticker-track');
+
     try {
       const res  = await fetch('/api/trending');
       const data = await res.json();
-      const syms = data.symbols || [];
-      if (!syms.length) throw new Error('No symbols');
 
-      const track   = document.getElementById('ticker-track');
-      const loading = document.getElementById('ticker-loading');
-      loading.style.display = 'none';
+      console.log('[ST] API response keys:', Object.keys(data));
+      console.log('[ST] First symbol sample:', JSON.stringify(data.symbols?.[0]));
+
+      const syms = data.symbols || data.equities || [];
+      if (!syms.length) throw new Error('No symbols returned');
+
+      status.style.display = 'none';
       track.innerHTML = '';
+      cancelAnimationFrame(animFrame);
 
       [...syms, ...syms].forEach(s => track.appendChild(buildItem(s)));
-      startScroll();
-      setTimeout(() => { cancelAnimationFrame(animFrame); loadTicker(); }, 60000);
+      startScroll(track);
+
+      setTimeout(() => loadTicker(), 60000);
+
     } catch(e) {
-      console.error('[ST Ticker]', e);
-      document.getElementById('ticker-loading').textContent = 'Unable to load data';
+      console.error('[ST Ticker] Error:', e);
+      status.textContent = 'Unable to load — retrying...';
+      setTimeout(() => loadTicker(), 10000);
     }
   }
 

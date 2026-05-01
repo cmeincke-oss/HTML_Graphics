@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stocktwits Ticker</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 1920px;
+      height: 1080px;
+      /* Set to transparent for production use in vMix/OBS */
+      /* Change to 'transparent' once confirmed working on Vercel */
+      background: #1a1a1a;
+      overflow: hidden;
+    }
+
+    #ticker-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 1920px;
+      min-height: 80px;
+    }
+
+    #ticker-bar iframe,
+    #ticker-bar > div > * {
+      width: 1920px !important;
+      max-width: 1920px !important;
+      height: 80px !important;
+      min-height: 80px !important;
+      border: none !important;
+      display: block !important;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="ticker-bar">
+    <div class="stocktwits-widget"
+      data-animated="true"
+      data-asset-class="equity"
+      data-color-theme="light"
+      data-location="US"
+      data-logos="true"
+      data-quantity="20"
+      data-sparklines="true"
+      data-transparent="true"
+      data-widget="bar">
+      <script async src="https://widgets-api.stocktwits-cdn.com/loader.js"></script>
+    </div>
+  </div>
+
+  <script>
+    let attempts = 0;
+    function poll() {
+      attempts++;
+      const iframes = document.querySelectorAll('iframe');
+      if (iframes.length > 0) {
+        iframes.forEach(f => {
+          f.style.cssText = 'width:1920px!important;height:80px!important;min-height:80px!important;display:block!important;border:none!important;';
+        });
+        console.log('[ST] Widget loaded successfully');
+      } else if (attempts < 30) {
+        setTimeout(poll, 500);
+      } else {
+        console.warn('[ST] Widget failed to inject — check domain allowlist with Stocktwits');
+      }
+    }
+    window.addEventListener('load', () => setTimeout(poll, 300));
+  </script>
+
+</body>
+</html>

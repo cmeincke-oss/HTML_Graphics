@@ -19,21 +19,21 @@
       bottom: 0;
       left: 0;
       width: 1920px;
-      height: 120px;
-      background: rgba(255,0,0,0.2); /* debug: red tint so we can see the container */
+      /* Let height be natural — don't constrain it */
+      min-height: 40px;
     }
 
-    /* Nuclear option — force everything inside to fill */
-    #ticker-bar *,
+    /* Let the widget render naturally — JS will scale it */
+    .stocktwits-widget {
+      display: block;
+    }
+
+    /* Don't force iframe height — let it be natural */
     #ticker-bar iframe {
       display: block !important;
-      width: 1920px !important;
-      height: 120px !important;
-      min-width: 1920px !important;
-      min-height: 120px !important;
-      max-width: none !important;
       border: none !important;
-      overflow: visible !important;
+      /* Width only — no height constraint */
+      width: 100% !important;
     }
   </style>
 </head>
@@ -55,28 +55,37 @@
   </div>
 
   <script>
-    function forceSize() {
-      const all = document.querySelectorAll('#ticker-bar, #ticker-bar *, #ticker-bar iframe');
-      all.forEach(el => {
-        el.style.setProperty('width',      '1920px', 'important');
-        el.style.setProperty('height',     '120px',  'important');
-        el.style.setProperty('min-width',  '1920px', 'important');
-        el.style.setProperty('min-height', '120px',  'important');
-        el.style.setProperty('display',    'block',  'important');
-        el.style.setProperty('border',     'none',   'important');
-      });
-
-      const iframes = document.querySelectorAll('#ticker-bar iframe');
-      if (iframes.length > 0) {
-        console.log('[ST] iframe found and sized — count:', iframes.length);
-        // Keep enforcing in case widget resizes itself
-        setTimeout(forceSize, 1000);
-      } else {
-        setTimeout(forceSize, 200);
+    function waitForIframe() {
+      const iframe = document.querySelector('#ticker-bar iframe');
+      if (!iframe) {
+        setTimeout(waitForIframe, 200);
+        return;
       }
+
+      console.log('[ST] iframe found');
+      console.log('[ST] iframe natural size:', iframe.offsetWidth, 'x', iframe.offsetHeight);
+      console.log('[ST] iframe style:', iframe.getAttribute('style'));
+      console.log('[ST] iframe attributes:');
+      Array.from(iframe.attributes).forEach(a => console.log('  ', a.name, '=', a.value));
+
+      // Remove any inline size restrictions the widget set
+      iframe.style.removeProperty('width');
+      iframe.style.removeProperty('height');
+      iframe.style.removeProperty('max-width');
+
+      // Set to full width, auto height
+      iframe.style.setProperty('width', '1920px', 'important');
+      iframe.style.setProperty('min-width', '1920px', 'important');
+      iframe.style.setProperty('display', 'block', 'important');
+      iframe.style.setProperty('border', 'none', 'important');
+
+      // Log after a beat to see what size it settled at
+      setTimeout(() => {
+        console.log('[ST] iframe settled size:', iframe.offsetWidth, 'x', iframe.offsetHeight);
+      }, 1000);
     }
 
-    window.addEventListener('load', () => forceSize());
+    window.addEventListener('load', () => setTimeout(waitForIframe, 300));
   </script>
 
 </body>

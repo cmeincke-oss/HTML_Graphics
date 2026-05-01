@@ -19,21 +19,21 @@
       bottom: 0;
       left: 0;
       width: 1920px;
-      /* Let height be natural — don't constrain it */
-      min-height: 40px;
+      height: 150px;
     }
 
-    /* Let the widget render naturally — JS will scale it */
     .stocktwits-widget {
       display: block;
+      width: 1920px;
+      height: 150px;
     }
 
-    /* Don't force iframe height — let it be natural */
     #ticker-bar iframe {
       display: block !important;
       border: none !important;
-      /* Width only — no height constraint */
-      width: 100% !important;
+      width: 1920px !important;
+      min-width: 1920px !important;
+      /* Do NOT set height here — let the widget animate to 150px naturally */
     }
   </style>
 </head>
@@ -62,27 +62,25 @@
         return;
       }
 
-      console.log('[ST] iframe found');
-      console.log('[ST] iframe natural size:', iframe.offsetWidth, 'x', iframe.offsetHeight);
-      console.log('[ST] iframe style:', iframe.getAttribute('style'));
-      console.log('[ST] iframe attributes:');
-      Array.from(iframe.attributes).forEach(a => console.log('  ', a.name, '=', a.value));
+      console.log('[ST] iframe found — waiting for height transition to complete...');
 
-      // Remove any inline size restrictions the widget set
-      iframe.style.removeProperty('width');
-      iframe.style.removeProperty('height');
-      iframe.style.removeProperty('max-width');
-
-      // Set to full width, auto height
-      iframe.style.setProperty('width', '1920px', 'important');
-      iframe.style.setProperty('min-width', '1920px', 'important');
-      iframe.style.setProperty('display', 'block', 'important');
-      iframe.style.setProperty('border', 'none', 'important');
-
-      // Log after a beat to see what size it settled at
+      // Widget animates height 0 -> 150px over 0.35s
+      // Wait 800ms to be safe, then lock it
       setTimeout(() => {
-        console.log('[ST] iframe settled size:', iframe.offsetWidth, 'x', iframe.offsetHeight);
-      }, 1000);
+        const h = iframe.offsetHeight;
+        console.log('[ST] height after transition:', h);
+
+        // Lock at whatever height it settled at (should be 150)
+        iframe.style.setProperty('height', h + 'px', 'important');
+        iframe.style.setProperty('min-height', h + 'px', 'important');
+        iframe.style.setProperty('transition', 'none', 'important');
+        iframe.style.setProperty('width', '1920px', 'important');
+        iframe.style.setProperty('min-width', '1920px', 'important');
+        iframe.style.setProperty('display', 'block', 'important');
+        iframe.style.setProperty('border', 'none', 'important');
+
+        console.log('[ST] locked at:', iframe.offsetWidth, 'x', iframe.offsetHeight);
+      }, 800);
     }
 
     window.addEventListener('load', () => setTimeout(waitForIframe, 300));
